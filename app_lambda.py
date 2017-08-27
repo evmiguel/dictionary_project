@@ -20,8 +20,7 @@ s3 = boto3.resource('s3')
 
 path = "/tmp/"+filename
 
-def add_entry(word,definition):
-	
+def retrieve_file_from_s3():
 	try:
 		s3.Bucket(bucket).download_file(filename,path)
 	except ClientError as e:
@@ -30,27 +29,53 @@ def add_entry(word,definition):
 		local_file.write("entry,definition\n")
 		local_file.close()
 		s3.Object(bucket,filename).upload_file(path)
-		
+
+def add_entry(word,definition):
+	retrieve_file_from_s3()
 	if not does_word_exist:
 		logger.info("Word does not exist in dictionary")
 		local_file = open(path, 'a')
 		local_file.write(word+","+definition+"\n")
 		local_file.close()
 		s3.Object(bucket,filename).upload_file(path)
-		return { "message" : "success" }
+		return { 
+			"word" 		: word,
+			"definition" 	: definition
+			}
 	else:
 		raise Exception("Word already exists! Not adding entry.")	
 
 def does_word_exist(entry):
-	local_file = open(path,"r+")
-	lines = local_file.readlines()
-	local_file.seek(0)
+	lines = get_lines_from_file()
 	for line in lines:
 		word = line.split(",")[0]
 		if entry == word:
 			return True
 	return False
-	
+
+def delete_word(word):
+	if does_word_exist(word):
+		logger.info("Word exists. Deleting...")
+		remove_word_from_dictionary(word)
+	else:
+		raise Exception("Word does not exist. Exiting...")	
+
+def remove_word_from_dictionary(word):
+	retrieve_file_from_s3()
+	lines 		= get_lines_from_file()
+	local_file	= open(path,"w+")
+	for line in lines:
+		entry	= line.split(",")[0]	
+		if entry != word:
+			local_file.write(line)
+	local_file.close()
+	s3.Object(bucket,filename).upload_file(path)
+
+def get_lines_from_file():
+	local_file = open(path,"r+")
+	lines = local_file.readlines()
+	local_file.close()
+	return lines
 
 if __name__ == '__main__':
-	add_entry("word","this is the definition of the word")
+	remove_word_from_dictionary("word")
